@@ -19,6 +19,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.inventory_transaction import InventoryTransaction
+    from app.models.sale import Sale
     from app.models.supplier import Supplier
 
 
@@ -58,6 +60,12 @@ class Product(Base):
     )
 
     supplier: Mapped["Supplier | None"] = relationship(back_populates="products")
+    # passive_deletes="all": history rows are never nulled/removed by the ORM; the
+    # database's ON DELETE RESTRICT blocks deleting a product that has history.
+    inventory_transactions: Mapped[list["InventoryTransaction"]] = relationship(
+        back_populates="product", passive_deletes="all"
+    )
+    sales: Mapped[list["Sale"]] = relationship(back_populates="product", passive_deletes="all")
 
     def __repr__(self) -> str:
         return f"<Product id={self.id} sku={self.sku!r} stock={self.current_stock}>"
