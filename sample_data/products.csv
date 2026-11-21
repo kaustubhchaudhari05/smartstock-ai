@@ -1,0 +1,19 @@
+sku,name,category,description,current_stock,reorder_point,minimum_stock,reorder_quantity,unit_cost,supplier_name,is_active
+WM-001,Wireless Mouse,Electronics,2.4 GHz wireless optical mouse,12,20,10,100,8.50,TechSource Distributors,true
+KB-002,Mechanical Keyboard,Electronics,Full-size mechanical keyboard with brown switches,85,25,10,60,32.00,TechSource Distributors,true
+USB-003,USB-C Cable 1m,Electronics,USB-C to USB-C charging and data cable,0,40,20,200,2.10,TechSource Distributors,true
+HDMI-004,HDMI Cable 2m,Electronics,High-speed HDMI 2.0 cable,640,30,15,100,3.40,TechSource Distributors,true
+MON-005,27-inch Monitor,Electronics,27-inch 1440p IPS monitor,18,10,5,20,145.00,TechSource Distributors,true
+WC-006,HD Webcam,Electronics,1080p USB webcam with microphone,9,15,8,40,24.00,TechSource Distributors,true
+PAP-101,A4 Copy Paper (500 sheets),Office Supplies,80 gsm white A4 copy paper ream,220,100,50,300,4.20,OfficePro Wholesale,true
+PEN-102,Ballpoint Pens (box of 12),Office Supplies,Blue ballpoint pens,35,40,20,150,3.10,OfficePro Wholesale,true
+STP-103,Desktop Stapler,Office Supplies,Full-strip desktop stapler,60,15,5,30,6.75,OfficePro Wholesale,true
+NB-104,Spiral Notebook A5,Office Supplies,A5 ruled spiral notebook 80 pages,140,60,30,200,1.80,OfficePro Wholesale,true
+FAX-105,Thermal Fax Paper Roll,Office Supplies,Discontinued thermal fax paper,4,0,0,0,2.50,OfficePro Wholesale,false
+BOX-201,Shipping Box Medium,Packaging,Corrugated shipping box 30x20x15 cm,480,300,150,1000,0.85,PackRight Packaging,true
+TAPE-202,Packing Tape 48mm,Packaging,Clear acrylic packing tape 48 mm x 66 m,45,60,30,240,1.25,PackRight Packaging,true
+BUB-203,Bubble Wrap Roll 50m,Packaging,Small-bubble wrap 50 cm x 50 m,25,10,5,30,18.00,PackRight Packaging,true
+BRG-301,Ball Bearing 608ZZ,Components,Shielded deep-groove ball bearing 8x22x7 mm,1200,500,250,2000,0.40,Precision Components Ltd,true
+SCR-302,M4 Screws (pack of 100),Components,M4 x 12 mm stainless steel screws,300,80,40,200,2.90,Precision Components Ltd,true
+MTR-303,DC Motor 12V,Components,12 V brushed DC motor 3000 rpm,14,20,10,50,11.50,Precision Components Ltd,true
+SRV-304,Servo Motor SG90,Components,Micro servo motor (newly listed),50,15,8,50,3.20,Precision Components Ltd,true

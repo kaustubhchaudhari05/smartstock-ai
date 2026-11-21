@@ -1,0 +1,5 @@
+name,email,phone,address,lead_time_days,is_active
+TechSource Distributors,orders@techsource.example,+1-555-0101,"120 Circuit Ave, San Jose, CA",7,true
+OfficePro Wholesale,sales@officepro.example,+1-555-0102,"45 Commerce St, Columbus, OH",5,true
+PackRight Packaging,orders@packright.example,+1-555-0103,"9 Industrial Park Rd, Memphis, TN",10,true
+Precision Components Ltd,supply@precisioncomp.example,+1-555-0104,"300 Foundry Ln, Detroit, MI",14,true
