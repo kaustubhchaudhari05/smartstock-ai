@@ -19,6 +19,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.ai_recommendation import AIRecommendation
+    from app.models.inventory_alert import InventoryAlert
     from app.models.inventory_transaction import InventoryTransaction
     from app.models.sale import Sale
     from app.models.supplier import Supplier
@@ -66,6 +68,12 @@ class Product(Base):
         back_populates="product", passive_deletes="all"
     )
     sales: Mapped[list["Sale"]] = relationship(back_populates="product", passive_deletes="all")
+    alerts: Mapped[list["InventoryAlert"]] = relationship(
+        back_populates="product", passive_deletes="all"
+    )
+    recommendations: Mapped[list["AIRecommendation"]] = relationship(
+        back_populates="product", passive_deletes="all"
+    )
 
     def __repr__(self) -> str:
         return f"<Product id={self.id} sku={self.sku!r} stock={self.current_stock}>"
