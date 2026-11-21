@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.models.ai_recommendation import AIRecommendation
     from app.models.inventory_alert import InventoryAlert
     from app.models.inventory_transaction import InventoryTransaction
+    from app.models.purchase_order_item import PurchaseOrderItem
     from app.models.sale import Sale
     from app.models.supplier import Supplier
 
@@ -72,6 +73,9 @@ class Product(Base):
         back_populates="product", passive_deletes="all"
     )
     recommendations: Mapped[list["AIRecommendation"]] = relationship(
+        back_populates="product", passive_deletes="all"
+    )
+    purchase_order_items: Mapped[list["PurchaseOrderItem"]] = relationship(
         back_populates="product", passive_deletes="all"
     )
 

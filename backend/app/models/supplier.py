@@ -7,6 +7,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.product import Product
+    from app.models.purchase_order import PurchaseOrder
 
 
 class Supplier(Base):
@@ -24,6 +25,9 @@ class Supplier(Base):
     # passive_deletes="all": never null out products.supplier_id on delete; let the
     # database's ON DELETE RESTRICT reject deleting a supplier that still has products.
     products: Mapped[list["Product"]] = relationship(
+        back_populates="supplier", passive_deletes="all"
+    )
+    purchase_orders: Mapped[list["PurchaseOrder"]] = relationship(
         back_populates="supplier", passive_deletes="all"
     )
 
