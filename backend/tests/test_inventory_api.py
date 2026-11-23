@@ -117,12 +117,20 @@ def test_overview(client, db, product, supplier):
     assert res.status_code == 200
     body = res.json()
     # 15 x 8.50 = 127.50 ; 220 x 4.20 = 924.00
-    assert body["summary"] == {"total_products": 2, "total_units": 235, "total_stock_value": "1051.50"}
+    assert body["summary"] == {
+        "total_products": 2,
+        "total_units": 235,
+        "total_stock_value": "1051.50",
+        "low_stock_count": 1,
+        "out_of_stock_count": 0,
+    }
     wm = next(i for i in body["items"] if i["sku"] == "WM-001")
     assert wm["stock_value"] == "127.50"
+    assert wm["inventory_status"] == "LOW_STOCK"  # 15 <= reorder point 20
     assert wm["last_stock_update"] is not None
     paper = next(i for i in body["items"] if i["sku"] == "PAP-101")
     assert paper["last_stock_update"] is None  # no movements recorded
+    assert paper["inventory_status"] == "HEALTHY"
 
     office = client.get("/api/inventory", params={"category": "office supplies", "include_inactive": True}).json()
     assert office["summary"]["total_products"] == 2
@@ -138,6 +146,20 @@ def test_product_inventory_detail(client, product):
     assert body["current_stock"] == 18
     assert body["stock_value"] == "153.00"
     assert [t["stock_change"] for t in body["recent_transactions"]] == [-4, 10]
+
+
+def test_status_follows_stock_movements(client, product):
+    """Status is recalculated from current stock on every read (12, reorder point 20)."""
+    status = lambda: client.get(f"/api/inventory/{product.id}").json()["inventory_status"]
+    assert status() == "LOW_STOCK"
+    move(client, product.id, "STOCK_IN", 9)  # 21
+    assert status() == "HEALTHY"
+    move(client, product.id, "STOCK_OUT", 1)  # 20: boundary
+    assert status() == "LOW_STOCK"
+    move(client, product.id, "STOCK_OUT", 20)  # 0
+    assert status() == "OUT_OF_STOCK"
+    summary = client.get("/api/inventory").json()["summary"]
+    assert (summary["low_stock_count"], summary["out_of_stock_count"]) == (0, 1)
 
 
 def test_product_inventory_detail_missing(client):

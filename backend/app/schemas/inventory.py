@@ -4,6 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models import TransactionType
+from app.services.reorder_service import InventoryStatus
 
 
 class InventoryTransactionCreate(BaseModel):
@@ -63,6 +64,7 @@ class InventoryItem(BaseModel):
     reorder_quantity: int
     unit_cost: Decimal
     stock_value: Decimal = Field(description="current_stock x unit_cost, calculated by the backend")
+    inventory_status: InventoryStatus
     supplier_id: int | None
     last_stock_update: datetime | None = Field(description="Time of the latest stock movement")
 
@@ -71,6 +73,8 @@ class InventorySummary(BaseModel):
     total_products: int
     total_units: int
     total_stock_value: Decimal
+    low_stock_count: int
+    out_of_stock_count: int
 
 
 class InventoryOverview(BaseModel):

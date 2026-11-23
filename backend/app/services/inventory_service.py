@@ -22,6 +22,7 @@ from app.schemas.inventory import (
     StockMovementResult,
 )
 from app.services.exceptions import BusinessRuleError, NotFoundError
+from app.services.reorder_service import InventoryStatus, classify_stock
 
 CENT = Decimal("0.01")
 RECENT_TRANSACTIONS = 20
@@ -67,6 +68,7 @@ def _to_item(product: Product, last_update: datetime | None) -> dict:
         "reorder_quantity": product.reorder_quantity,
         "unit_cost": product.unit_cost,
         "stock_value": stock_value(product),
+        "inventory_status": classify_stock(product.current_stock, product.reorder_point),
         "supplier_id": product.supplier_id,
         "last_stock_update": last_update,
     }
@@ -81,6 +83,8 @@ def get_overview(
         total_products=len(items),
         total_units=sum(i.current_stock for i in items),
         total_stock_value=sum((i.stock_value for i in items), Decimal("0.00")),
+        low_stock_count=sum(i.inventory_status == InventoryStatus.LOW_STOCK for i in items),
+        out_of_stock_count=sum(i.inventory_status == InventoryStatus.OUT_OF_STOCK for i in items),
     )
     return InventoryOverview(summary=summary, items=items)
 
