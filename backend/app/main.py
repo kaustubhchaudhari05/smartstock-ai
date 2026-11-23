@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import health, products
+from app.api.routes import health, products, suppliers
 from app.core.config import get_settings
 from app.services.exceptions import ServiceError
 
@@ -17,3 +17,4 @@ async def service_error_handler(_: Request, exc: ServiceError) -> JSONResponse:
 
 app.include_router(health.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
+app.include_router(suppliers.router, prefix="/api")

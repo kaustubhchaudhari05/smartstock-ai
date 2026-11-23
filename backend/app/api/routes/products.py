@@ -1,15 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Query, status
 
-from app.core.database import get_db
+from app.api.deps import DbSession
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.services import product_service
 
 router = APIRouter(prefix="/products", tags=["products"])
-
-DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("", response_model=list[ProductRead])

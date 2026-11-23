@@ -4,10 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Product
-
-
-def _escape_like(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+from app.repositories.utils import escape_like
 
 
 def list_products(
@@ -24,7 +21,7 @@ def list_products(
     if not include_inactive:
         stmt = stmt.where(Product.is_active.is_(True))
     if search:
-        pattern = f"%{_escape_like(search)}%"
+        pattern = f"%{escape_like(search)}%"
         stmt = stmt.where(
             or_(Product.name.ilike(pattern, escape="\\"), Product.sku.ilike(pattern, escape="\\"))
         )
