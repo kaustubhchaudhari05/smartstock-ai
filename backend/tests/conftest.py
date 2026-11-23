@@ -3,6 +3,8 @@
 Tests run against a separate database (<DATABASE_URL db name>_test, created on first use)
 so the development data is never touched. Each test runs inside a transaction that is
 rolled back afterwards; services may call commit(), which only releases a savepoint.
+Fixtures commit() their data so a service-level rollback (e.g. after a rejected stock
+movement) returns to the post-fixture state instead of discarding the fixtures.
 """
 
 from collections.abc import Iterator
@@ -68,7 +70,7 @@ def client(db: Session) -> Iterator[TestClient]:
 def supplier(db: Session) -> Supplier:
     s = Supplier(name="Acme Peripherals", email="orders@acme.example", lead_time_days=7)
     db.add(s)
-    db.flush()
+    db.commit()
     return s
 
 
@@ -76,7 +78,7 @@ def supplier(db: Session) -> Supplier:
 def inactive_supplier(db: Session) -> Supplier:
     s = Supplier(name="Old Supplier", email="old@supplier.example", lead_time_days=3, is_active=False)
     db.add(s)
-    db.flush()
+    db.commit()
     return s
 
 
@@ -94,5 +96,5 @@ def product(db: Session, supplier: Supplier) -> Product:
         supplier=supplier,
     )
     db.add(p)
-    db.flush()
+    db.commit()
     return p
