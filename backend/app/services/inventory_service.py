@@ -21,6 +21,7 @@ from app.schemas.inventory import (
     ProductInventoryDetail,
     StockMovementResult,
 )
+from app.services import alert_service
 from app.services.exceptions import BusinessRuleError, NotFoundError
 from app.services.reorder_service import InventoryStatus, classify_stock
 
@@ -115,6 +116,8 @@ def apply_movement(
 ) -> tuple[InventoryTransaction, int]:
     """Lock the product, validate and apply a stock movement. Does not commit.
 
+    Also re-checks the product's stock alerts (alert_service.check_product) in the same
+    transaction, so alerts appear/resolve as soon as stock crosses a threshold.
     Returns the new transaction and the stock level before the movement.
     Callers (this module, the sales service) commit as part of their own unit of work.
     """
@@ -142,6 +145,8 @@ def apply_movement(
     db.add(txn)
     product.current_stock = new_stock
     db.flush()
+    # Keep alerts in step with stock immediately (same transaction as the movement).
+    alert_service.check_product(db, product)
     return txn, previous
 
 
