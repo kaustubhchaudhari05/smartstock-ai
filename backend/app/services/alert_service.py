@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.models import AlertSeverity, AlertStatus, AlertType, InventoryAlert, Product
 from app.repositories import alert_repository
+from app.schemas.alert import AlertDetail, AlertProductStock, AlertRead
+from app.services.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.services.reorder_service import InventoryStatus, classify_stock
 
 UNIQUE_UNRESOLVED_INDEX = "uq_inventory_alerts_product_id_alert_type_unresolved"
@@ -132,3 +134,76 @@ def run_inventory_check(db: Session) -> MonitoringSummary:
         db.rollback()
         raise
     return summary
+
+
+# ---------- read / acknowledge (alerts API) ----------
+
+# Users can only acknowledge (OPEN -> ACKNOWLEDGED) or un-acknowledge (ACKNOWLEDGED -> OPEN).
+# Resolving is automatic (stock recovery or deactivation); resolving by hand while the
+# condition persists would just re-raise the alert on the next check.
+
+
+def to_alert_read(alert: InventoryAlert) -> AlertRead:
+    return AlertRead(
+        id=alert.id,
+        product_id=alert.product_id,
+        product_sku=alert.product.sku,
+        product_name=alert.product.name,
+        alert_type=alert.alert_type,
+        severity=alert.severity,
+        message=alert.message,
+        status=alert.status,
+        created_at=alert.created_at,
+        resolved_at=alert.resolved_at,
+    )
+
+
+def to_alert_detail(alert: InventoryAlert) -> AlertDetail:
+    p = alert.product
+    return AlertDetail(
+        **to_alert_read(alert).model_dump(),
+        product=AlertProductStock(
+            current_stock=p.current_stock,
+            reorder_point=p.reorder_point,
+            minimum_stock=p.minimum_stock,
+            reorder_quantity=p.reorder_quantity,
+            inventory_status=classify_stock(p.current_stock, p.reorder_point),
+            is_active=p.is_active,
+        ),
+    )
+
+
+def list_alerts(db: Session, **filters) -> list[AlertRead]:
+    return [to_alert_read(a) for a in alert_repository.list_alerts(db, **filters)]
+
+
+def get_alert(db: Session, alert_id: int) -> AlertDetail:
+    alert = alert_repository.get_alert(db, alert_id)
+    if alert is None:
+        raise NotFoundError(f"Alert {alert_id} not found")
+    return to_alert_detail(alert)
+
+
+def update_alert_status(db: Session, alert_id: int, new_status: AlertStatus) -> AlertDetail:
+    try:
+        # Row lock: monitoring may be resolving the same alert concurrently.
+        alert = alert_repository.lock_alert(db, alert_id)
+        if alert is None:
+            raise NotFoundError(f"Alert {alert_id} not found")
+        current, target = alert.status, new_status.value
+        if current != target:
+            if current == AlertStatus.RESOLVED.value:
+                raise ConflictError(f"Alert {alert_id} is already resolved")
+            if target == AlertStatus.RESOLVED.value:
+                raise BusinessRuleError(
+                    "Alerts resolve automatically when stock recovers or the product is "
+                    "deactivated; acknowledge the alert instead"
+                )
+            alert.status = target  # OPEN <-> ACKNOWLEDGED
+            db.commit()
+        else:
+            db.rollback()  # release the row lock; nothing changed
+    except Exception:
+        db.rollback()
+        raise
+    return get_alert(db, alert_id)
