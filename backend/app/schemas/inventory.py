@@ -73,12 +73,22 @@ class InventorySummary(BaseModel):
     total_products: int
     total_units: int
     total_stock_value: Decimal
+    healthy_count: int
     low_stock_count: int
     out_of_stock_count: int
+    reorder_needed_count: int = Field(description="Active products at or below their reorder point")
+    replenishment_cost: Decimal = Field(
+        description="Sum of reorder_quantity x unit_cost for active products that need reordering"
+    )
+
+
+class CategorySummary(InventorySummary):
+    category: str
 
 
 class InventoryOverview(BaseModel):
     summary: InventorySummary
+    categories: list[CategorySummary] = Field(description="Same figures per category, sorted by name")
     items: list[InventoryItem]
 
 

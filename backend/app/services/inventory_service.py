@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models import InventoryTransaction, Product, TransactionType
 from app.repositories import inventory_repository
 from app.schemas.inventory import (
+    CategorySummary,
     InventoryItem,
     InventoryOverview,
     InventorySummary,
@@ -75,19 +76,45 @@ def _to_item(product: Product, last_update: datetime | None) -> dict:
     }
 
 
+def replenishment_cost(item: InventoryItem) -> Decimal:
+    """Cost of one standard reorder (reorder_quantity x unit_cost) if the item needs it, else 0."""
+    if not item.is_active or item.inventory_status == InventoryStatus.HEALTHY:
+        return Decimal("0.00")
+    return (item.reorder_quantity * item.unit_cost).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def summarize(items: list[InventoryItem]) -> dict:
+    """Deterministic stock analytics over a set of inventory items."""
+    status_count = lambda status: sum(i.inventory_status == status for i in items)
+    needing = [i for i in items if i.is_active and i.inventory_status != InventoryStatus.HEALTHY]
+    return {
+        "total_products": len(items),
+        "total_units": sum(i.current_stock for i in items),
+        "total_stock_value": sum((i.stock_value for i in items), Decimal("0.00")),
+        "healthy_count": status_count(InventoryStatus.HEALTHY),
+        "low_stock_count": status_count(InventoryStatus.LOW_STOCK),
+        "out_of_stock_count": status_count(InventoryStatus.OUT_OF_STOCK),
+        "reorder_needed_count": len(needing),
+        "replenishment_cost": sum((replenishment_cost(i) for i in needing), Decimal("0.00")),
+    }
+
+
 def get_overview(
     db: Session, *, category: str | None = None, include_inactive: bool = False
 ) -> InventoryOverview:
     rows = inventory_repository.list_stock(db, category=category, include_inactive=include_inactive)
     items = [InventoryItem(**_to_item(p, last)) for p, last in rows]
-    summary = InventorySummary(
-        total_products=len(items),
-        total_units=sum(i.current_stock for i in items),
-        total_stock_value=sum((i.stock_value for i in items), Decimal("0.00")),
-        low_stock_count=sum(i.inventory_status == InventoryStatus.LOW_STOCK for i in items),
-        out_of_stock_count=sum(i.inventory_status == InventoryStatus.OUT_OF_STOCK for i in items),
+
+    by_category: dict[str, list[InventoryItem]] = {}
+    for item in items:
+        by_category.setdefault(item.category, []).append(item)
+    categories = [
+        CategorySummary(category=name, **summarize(group))
+        for name, group in sorted(by_category.items(), key=lambda kv: kv[0].lower())
+    ]
+    return InventoryOverview(
+        summary=InventorySummary(**summarize(items)), categories=categories, items=items
     )
-    return InventoryOverview(summary=summary, items=items)
 
 
 def get_product_inventory(db: Session, product_id: int) -> ProductInventoryDetail:

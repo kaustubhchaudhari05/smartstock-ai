@@ -121,8 +121,11 @@ def test_overview(client, db, product, supplier):
         "total_products": 2,
         "total_units": 235,
         "total_stock_value": "1051.50",
+        "healthy_count": 1,
         "low_stock_count": 1,
         "out_of_stock_count": 0,
+        "reorder_needed_count": 1,
+        "replenishment_cost": "850.00",  # WM-001: reorder 100 x 8.50
     }
     wm = next(i for i in body["items"] if i["sku"] == "WM-001")
     assert wm["stock_value"] == "127.50"
@@ -146,6 +149,49 @@ def test_product_inventory_detail(client, product):
     assert body["current_stock"] == 18
     assert body["stock_value"] == "153.00"
     assert [t["stock_change"] for t in body["recent_transactions"]] == [-4, 10]
+
+
+def test_inventory_analytics_by_category(client, db, product):
+    """product fixture: WM-001, Electronics, 12 units (LOW), reorder 100 x 8.50."""
+    def add(sku, category, stock, rp, rq, cost, active=True):
+        db.add(Product(sku=sku, name=sku, category=category, current_stock=stock, reorder_point=rp,
+                       minimum_stock=0, reorder_quantity=rq, unit_cost=Decimal(cost), is_active=active))
+
+    add("USB-003", "Electronics", 0, 40, 200, "2.10")           # OUT: 200 x 2.10 = 420.00
+    add("KB-002", "Electronics", 85, 25, 60, "32.00")           # HEALTHY
+    add("PEN-102", "Office Supplies", 35, 40, 150, "3.10")      # LOW: 150 x 3.10 = 465.00
+    add("FAX-105", "Office Supplies", 0, 5, 10, "2.50", False)  # inactive OUT: never in replenishment
+    db.commit()
+
+    body = client.get("/api/inventory").json()
+    s = body["summary"]
+    assert (s["total_products"], s["healthy_count"], s["low_stock_count"], s["out_of_stock_count"]) == (4, 1, 2, 1)
+    assert s["reorder_needed_count"] == 3
+    assert s["replenishment_cost"] == "1735.00"  # 850.00 + 420.00 + 465.00
+
+    cats = {c["category"]: c for c in body["categories"]}
+    assert list(cats) == ["Electronics", "Office Supplies"]  # sorted
+    e = cats["Electronics"]
+    assert (e["total_products"], e["total_units"], e["total_stock_value"]) == (3, 97, "2822.00")  # 102.00 + 0 + 2720.00
+    assert (e["reorder_needed_count"], e["replenishment_cost"]) == (2, "1270.00")
+    assert cats["Office Supplies"]["replenishment_cost"] == "465.00"
+
+    # inactive products: counted by status when included, but never need reordering
+    with_inactive = client.get("/api/inventory", params={"include_inactive": True}).json()["summary"]
+    assert (with_inactive["total_products"], with_inactive["out_of_stock_count"]) == (5, 2)
+    assert (with_inactive["reorder_needed_count"], with_inactive["replenishment_cost"]) == (3, "1735.00")
+
+    # category filter narrows both summary and breakdown
+    office = client.get("/api/inventory", params={"category": "office supplies"}).json()
+    assert [c["category"] for c in office["categories"]] == ["Office Supplies"]
+    assert office["summary"]["replenishment_cost"] == "465.00"
+
+
+def test_analytics_on_empty_inventory(client):
+    body = client.get("/api/inventory").json()
+    assert body["categories"] == [] and body["items"] == []
+    assert body["summary"]["total_stock_value"] == "0.00"
+    assert body["summary"]["replenishment_cost"] == "0.00"
 
 
 def test_status_follows_stock_movements(client, product):
