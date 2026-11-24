@@ -4,6 +4,8 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
+from app.core.limits import MAX_STOCK
+
 SKU_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
 
 # SKUs are stored upper-case so "wm-001" and "WM-001" cannot both exist.
@@ -12,7 +14,7 @@ Sku = Annotated[
 ]
 Name = Annotated[str, Field(min_length=1, max_length=255)]
 Category = Annotated[str, Field(min_length=1, max_length=100)]
-Quantity = Annotated[int, Field(ge=0)]
+Quantity = Annotated[int, Field(ge=0, le=MAX_STOCK)]
 Money = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
 
 

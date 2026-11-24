@@ -3,12 +3,14 @@ from decimal import Decimal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
+from app.core.limits import MAX_MOVEMENT_QUANTITY
+
 
 class SaleCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     product_id: int
-    quantity_sold: int = Field(gt=0)
+    quantity_sold: int = Field(gt=0, le=MAX_MOVEMENT_QUANTITY)
     unit_price: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     sale_date: AwareDatetime | None = Field(
         default=None, description="Defaults to now. Must include a timezone; cannot be in the future."

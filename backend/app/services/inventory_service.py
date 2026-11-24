@@ -10,6 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.orm import Session
 
+from app.core.limits import MAX_STOCK
 from app.models import InventoryTransaction, Product, TransactionType
 from app.repositories import inventory_repository
 from app.schemas.inventory import (
@@ -160,6 +161,10 @@ def apply_movement(
         raise BusinessRuleError(
             f"Insufficient stock for {product.sku}: {previous} available, "
             f"movement would leave {new_stock}"
+        )
+    if new_stock > MAX_STOCK:
+        raise BusinessRuleError(
+            f"Stock for {product.sku} would exceed the maximum of {MAX_STOCK} units"
         )
 
     txn = InventoryTransaction(

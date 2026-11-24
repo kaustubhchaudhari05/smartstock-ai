@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.limits import MAX_MOVEMENT_QUANTITY
 from app.models import TransactionType
 from app.services.reorder_service import InventoryStatus
 
@@ -15,7 +16,11 @@ class InventoryTransactionCreate(BaseModel):
 
     product_id: int
     transaction_type: TransactionType
-    quantity: int = Field(description="Positive, except ADJUSTMENT which may be negative")
+    quantity: int = Field(
+        ge=-MAX_MOVEMENT_QUANTITY,
+        le=MAX_MOVEMENT_QUANTITY,
+        description="Positive, except ADJUSTMENT which may be negative",
+    )
     reference: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 

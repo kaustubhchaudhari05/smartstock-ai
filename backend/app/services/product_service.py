@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import InventoryTransaction, Product, Supplier, TransactionType
 from app.repositories import product_repository
 from app.schemas.product import ProductCreate, ProductUpdate
+from app.services import alert_service
 from app.services.exceptions import BusinessRuleError, ConflictError, NotFoundError
 
 list_products = product_repository.list_products
@@ -41,14 +42,21 @@ def _ensure_sku_free(db: Session, sku: str, exclude_id: int | None = None) -> No
         raise ConflictError(f"SKU {sku} already exists")
 
 
-def _commit(db: Session, sku: str) -> None:
+def _save(db: Session, product: Product) -> None:
+    """Write the product, bring its stock alerts in line (thresholds, activation, name and
+    opening stock all affect them) and commit, all in one transaction."""
     try:
+        db.flush()
+        alert_service.check_product(db, product)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         # Unique SKU can still race between the check and the insert.
         if "uq_products_sku" in str(exc.orig):
-            raise ConflictError(f"SKU {sku} already exists") from exc
+            raise ConflictError(f"SKU {product.sku} already exists") from exc
+        raise
+    except Exception:
+        db.rollback()
         raise
 
 
@@ -70,7 +78,7 @@ def create_product(db: Session, data: ProductCreate) -> Product:
                 notes="Opening stock recorded at product creation",
             )
         )
-    _commit(db, data.sku)
+    _save(db, product)
     return get_product(db, product.id)
 
 
@@ -89,15 +97,16 @@ def update_product(db: Session, product_id: int, data: ProductUpdate) -> Product
 
     for field, value in changes.items():
         setattr(product, field, value)
-    _commit(db, product.sku)
+    _save(db, product)
     return get_product(db, product_id)
 
 
 def deactivate_product(db: Session, product_id: int) -> Product:
-    """Soft delete: products keep their sales and stock history, so they are never removed."""
+    """Soft delete: products keep their sales and stock history, so they are never removed.
+    Open alerts are resolved, since inactive products are not monitored."""
     product = get_product(db, product_id)
     if product.is_active:
         product.is_active = False
-        db.commit()
+        _save(db, product)
     return get_product(db, product_id)
 
