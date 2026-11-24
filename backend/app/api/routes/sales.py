@@ -5,9 +5,24 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession
 from app.schemas.sale import SaleCreate, SaleRead, SaleRecorded
-from app.services import sales_service
+from app.schemas.sales_analytics import SalesAnalytics
+from app.services import sales_analytics, sales_service
 
 router = APIRouter(prefix="/sales", tags=["sales"])
+
+
+@router.get("/analytics", response_model=SalesAnalytics)
+def sales_analytics_report(
+    db: DbSession,
+    product_id: Annotated[
+        int | None, Query(description="One product, with its 30-day daily series")
+    ] = None,
+    include_inactive: bool = False,
+):
+    """Deterministic sales metrics: 7/30-day units, average daily demand, days remaining, trend."""
+    return sales_analytics.get_analytics(
+        db, product_id=product_id, include_inactive=include_inactive
+    )
 
 
 @router.get("", response_model=list[SaleRead])

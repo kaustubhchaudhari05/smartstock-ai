@@ -1,5 +1,5 @@
 import enum
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -36,3 +36,29 @@ class ProductSalesMetrics(BaseModel):
         description="Units per UTC calendar day, last 30 days oldest first, today partial "
         "(single-product requests only)",
     )
+
+
+class AnalyticsDefinitions(BaseModel):
+    """The rules used, returned so the UI (and the LLM later) can state them precisely."""
+
+    short_window_days: int
+    long_window_days: int
+    trend_threshold: Decimal = Field(description="0.15 = 7-day vs 30-day daily average must differ by >15%")
+    windows: str = "rolling, ending at as_of"
+
+
+class SalesAnalyticsSummary(BaseModel):
+    products: int
+    units_sold_7d: int
+    units_sold_30d: int
+    increasing: int
+    stable: int
+    decreasing: int
+    insufficient_data: int
+
+
+class SalesAnalytics(BaseModel):
+    as_of: datetime
+    definitions: AnalyticsDefinitions
+    summary: SalesAnalyticsSummary
+    products: list[ProductSalesMetrics]

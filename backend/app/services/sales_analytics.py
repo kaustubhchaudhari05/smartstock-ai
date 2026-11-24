@@ -22,7 +22,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Product, Sale
-from app.schemas.sales_analytics import DailySales, ProductSalesMetrics, SalesTrend
+from app.schemas.sales_analytics import (
+    AnalyticsDefinitions,
+    DailySales,
+    ProductSalesMetrics,
+    SalesAnalytics,
+    SalesAnalyticsSummary,
+    SalesTrend,
+)
 from app.services.exceptions import NotFoundError
 
 SHORT_WINDOW = 7
@@ -163,3 +170,40 @@ def all_product_metrics(
         u7, u30, total = totals.get(p.id, (0, 0, 0))
         metrics.append(build_metrics(p, units_7d=u7, units_30d=u30, units_total=total))
     return metrics
+
+
+# ---------- API response ----------
+
+
+def get_analytics(
+    db: Session,
+    *,
+    product_id: int | None = None,
+    include_inactive: bool = False,
+    as_of: datetime | None = None,
+) -> SalesAnalytics:
+    """All products (no daily series), or one product with its 30-day daily series."""
+    as_of = as_of or now_utc()
+    if product_id is not None:
+        products = [product_metrics(db, product_id, as_of=as_of)]
+    else:
+        products = all_product_metrics(db, as_of=as_of, include_inactive=include_inactive)
+    trend_count = lambda trend: sum(m.trend == trend for m in products)
+    return SalesAnalytics(
+        as_of=as_of,
+        definitions=AnalyticsDefinitions(
+            short_window_days=SHORT_WINDOW,
+            long_window_days=LONG_WINDOW,
+            trend_threshold=TREND_THRESHOLD,
+        ),
+        summary=SalesAnalyticsSummary(
+            products=len(products),
+            units_sold_7d=sum(m.units_sold_7d for m in products),
+            units_sold_30d=sum(m.units_sold_30d for m in products),
+            increasing=trend_count(SalesTrend.INCREASING),
+            stable=trend_count(SalesTrend.STABLE),
+            decreasing=trend_count(SalesTrend.DECREASING),
+            insufficient_data=trend_count(SalesTrend.INSUFFICIENT_DATA),
+        ),
+        products=products,
+    )
