@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -28,7 +29,12 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "openai/gpt-oss-20b"
     llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
-    llm_max_retries: int = Field(default=2, ge=0, le=5)
+    llm_max_retries: int = Field(default=2, ge=0, le=5)  # transport retries (429/5xx/timeouts)
+    # Extra attempts when the model's answer is unusable (bad JSON / breaks business rules).
+    llm_invalid_response_retries: int = Field(default=1, ge=0, le=3)
+    # USD per 1M tokens, for cost logging only. 0 = free tier (Groq free plan costs nothing).
+    llm_input_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
+    llm_output_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 @lru_cache

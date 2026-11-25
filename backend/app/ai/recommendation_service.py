@@ -7,6 +7,11 @@
 
 Recommendations are decision support only: nothing here changes stock or creates orders.
 If the LLM fails, an LLMError is raised and nothing is written; monitoring is unaffected.
+
+Failure handling: transport problems (timeouts, 429, 5xx) are retried with backoff by the SDK
+(LLM_MAX_RETRIES). An unusable answer (invalid JSON, schema or business-rule violation) is
+re-asked up to LLM_INVALID_RESPONSE_RETRIES times, telling the model why it was rejected.
+Every attempt is logged with its token usage and estimated cost (app.ai.usage).
 """
 
 import logging
@@ -17,8 +22,9 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.ai.client import LLMClient, LLMInvalidResponseError, get_llm_client
+from app.ai.client import LLMClient, LLMError, LLMInvalidResponseError, LLMResponse, get_llm_client
 from app.ai.prompts import PROMPT_VERSION, build_recommendation_prompt
+from app.ai.usage import UsageTotals, log_llm_call
 from app.ai.schemas import (
     RECOMMENDATION_JSON_SCHEMA,
     RECOMMENDATION_SCHEMA_NAME,
@@ -32,6 +38,7 @@ from app.ai.schemas import (
     SupplierContext,
     parse_recommendation,
 )
+from app.core.config import get_settings
 from app.core.limits import MAX_MOVEMENT_QUANTITY, MAX_STOCK
 from app.models import AIRecommendation, InventoryAlert, Product
 from app.models.ai_recommendation import RiskLevel, Urgency
@@ -167,23 +174,8 @@ def generate_recommendation(
     context = build_context(db, product, alert, as_of or sales_analytics.now_utc())
 
     llm = llm or get_llm_client()
-    system, user = build_recommendation_prompt(context)
     started = time.monotonic()
-    try:
-        response = llm.complete_json(
-            system=system,
-            user=user,
-            schema_name=RECOMMENDATION_SCHEMA_NAME,
-            schema=RECOMMENDATION_JSON_SCHEMA,
-        )
-        rec = parse_recommendation(response.content)
-        check_against_context(rec, context)
-    except Exception as exc:
-        # type and message only: never the prompt, the response or the API key
-        logger.warning(
-            "AI recommendation failed for product %s: %s: %s", product.id, type(exc).__name__, exc
-        )
-        raise
+    rec, response, usage = _ask_llm(llm, context, product.id)
 
     recommendation = AIRecommendation(
         product_id=product.id,
@@ -195,8 +187,9 @@ def generate_recommendation(
         reasoning="\n".join(" ".join(point.split()) for point in rec.reasoning),
         model_name=response.model,
         prompt_version=PROMPT_VERSION,
-        prompt_tokens=response.prompt_tokens,
-        completion_tokens=response.completion_tokens,
+        # summed over all attempts, so stored usage matches what the provider billed
+        prompt_tokens=usage.prompt_tokens if usage.reported else None,
+        completion_tokens=usage.completion_tokens if usage.reported else None,
         context=context.model_dump(mode="json"),
     )
     db.add(recommendation)
@@ -207,12 +200,69 @@ def generate_recommendation(
         raise
     db.refresh(recommendation)
     logger.info(
-        "AI recommendation %s for product %s: risk=%s qty=%s model=%s tokens=%s+%s in %.1fs",
+        "AI recommendation %s saved for product %s: risk=%s qty=%s attempts=%s tokens=%s+%s in %.1fs",
         recommendation.id, product.id, recommendation.risk_level, recommendation.suggested_quantity,
-        response.model, response.prompt_tokens, response.completion_tokens,
-        time.monotonic() - started,
+        usage.attempts, usage.prompt_tokens, usage.completion_tokens, time.monotonic() - started,
     )
     return recommendation
+
+
+def _ask_llm(
+    llm: LLMClient, context: RecommendationContext, product_id: int
+) -> tuple[LLMRecommendation, LLMResponse, UsageTotals]:
+    """Call the LLM until it gives a valid answer or the invalid-answer retries run out.
+
+    Only LLMInvalidResponseError is retried here; other LLMErrors (already retried by the SDK
+    where that makes sense) are raised immediately.
+    """
+    system, base_user = build_recommendation_prompt(context)
+    max_attempts = 1 + get_settings().llm_invalid_response_retries
+    usage = UsageTotals()
+    rejection: LLMInvalidResponseError | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        user = base_user
+        if rejection is not None:
+            user += (
+                f"\n\nYour previous answer was rejected: {rejection}. "
+                "Return a corrected JSON object that follows all rules."
+            )
+        usage.attempts = attempt
+        call_started = time.monotonic()
+        log = dict(purpose="recommendation", product_id=product_id, attempt=attempt,
+                   model=llm.model_name)
+        try:
+            response = llm.complete_json(
+                system=system,
+                user=user,
+                schema_name=RECOMMENDATION_SCHEMA_NAME,
+                schema=RECOMMENDATION_JSON_SCHEMA,
+            )
+        except LLMInvalidResponseError as exc:  # e.g. provider-side schema validation failure
+            log_llm_call(**log, outcome="invalid", latency_seconds=time.monotonic() - call_started,
+                         error=exc)
+            rejection = exc
+            continue
+        except LLMError as exc:
+            log_llm_call(**log, outcome="error", latency_seconds=time.monotonic() - call_started,
+                         error=exc)
+            raise
+
+        usage.add(response.prompt_tokens, response.completion_tokens)
+        log.update(model=response.model, latency_seconds=time.monotonic() - call_started,
+                   prompt_tokens=response.prompt_tokens, completion_tokens=response.completion_tokens)
+        try:
+            rec = parse_recommendation(response.content)
+            check_against_context(rec, context)
+        except LLMInvalidResponseError as exc:
+            log_llm_call(**log, outcome="invalid", error=exc)
+            rejection = exc
+            continue
+        log_llm_call(**log, outcome="ok")
+        return rec, response, usage
+
+    assert rejection is not None
+    raise rejection
 
 
 # ---------- reads ----------

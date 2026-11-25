@@ -10,9 +10,11 @@ from app.ai.client import (
 )
 from app.api.routes import alerts, health, inventory, products, recommendations, sales, suppliers
 from app.core.config import get_settings
+from app.core.logging_config import configure_logging
 from app.services.exceptions import ServiceError
 
 settings = get_settings()
+configure_logging()
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 

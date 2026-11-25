@@ -172,10 +172,13 @@ class FakeLLMClient:
 
     model_name = "fake"
 
-    def __init__(self, steps: Sequence[FakeStep] = ("{}",)):
+    def __init__(
+        self, steps: Sequence[FakeStep] = ("{}",), *, prompt_tokens: int = 0, completion_tokens: int = 0
+    ):
         if not steps:
             raise ValueError("FakeLLMClient needs at least one step")
         self._steps = list(steps)
+        self._usage = (prompt_tokens, completion_tokens)
         self.calls: list[dict[str, Any]] = []
 
     def complete_json(
@@ -186,7 +189,10 @@ class FakeLLMClient:
         if isinstance(step, LLMError):
             raise step
         content = step(system, user, schema) if callable(step) else step
-        return LLMResponse(content=content, model=self.model_name, prompt_tokens=0, completion_tokens=0)
+        return LLMResponse(
+            content=content, model=self.model_name,
+            prompt_tokens=self._usage[0], completion_tokens=self._usage[1],
+        )
 
 
 # ---------- factory ----------
