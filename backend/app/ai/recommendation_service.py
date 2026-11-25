@@ -36,7 +36,8 @@ from app.core.limits import MAX_MOVEMENT_QUANTITY, MAX_STOCK
 from app.models import AIRecommendation, InventoryAlert, Product
 from app.models.ai_recommendation import RiskLevel, Urgency
 from app.models.inventory_alert import AlertStatus
-from app.repositories import alert_repository
+from app.repositories import alert_repository, recommendation_repository
+from app.schemas.recommendation import RecommendationDetail, RecommendationRead
 from app.services import reorder_service, sales_analytics
 from app.services.exceptions import BusinessRuleError, NotFoundError
 
@@ -212,3 +213,49 @@ def generate_recommendation(
         time.monotonic() - started,
     )
     return recommendation
+
+
+# ---------- reads ----------
+
+
+def _read_fields(rec: AIRecommendation) -> dict:
+    return dict(
+        id=rec.id,
+        product_id=rec.product_id,
+        product_sku=rec.product.sku,
+        product_name=rec.product.name,
+        alert_id=rec.alert_id,
+        risk_level=rec.risk_level,
+        urgency=rec.urgency,
+        recommendation=rec.recommendation,
+        suggested_quantity=rec.suggested_quantity,
+        reasoning=rec.reasoning.splitlines(),
+        status=rec.status,
+        model_name=rec.model_name,
+        created_at=rec.created_at,
+    )
+
+
+def to_read(rec: AIRecommendation) -> RecommendationRead:
+    return RecommendationRead(**_read_fields(rec))
+
+
+def to_detail(rec: AIRecommendation) -> RecommendationDetail:
+    return RecommendationDetail(
+        **_read_fields(rec),
+        prompt_version=rec.prompt_version,
+        prompt_tokens=rec.prompt_tokens,
+        completion_tokens=rec.completion_tokens,
+        context=rec.context,
+    )
+
+
+def list_recommendations(db: Session, **filters) -> list[RecommendationRead]:
+    return [to_read(r) for r in recommendation_repository.list_recommendations(db, **filters)]
+
+
+def get_recommendation(db: Session, recommendation_id: int) -> RecommendationDetail:
+    rec = recommendation_repository.get_recommendation(db, recommendation_id)
+    if rec is None:
+        raise NotFoundError(f"Recommendation {recommendation_id} not found")
+    return to_detail(rec)
