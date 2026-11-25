@@ -56,6 +56,19 @@ def db(engine: Engine) -> Iterator[Session]:
         connection.close()
 
 
+@pytest.fixture(autouse=True)
+def no_real_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests must never call a real LLM, even when the developer's .env has a working key.
+    Tests that need one pass a FakeLLMClient or patch get_llm_client themselves."""
+    from app.ai import recommendation_service
+    from app.ai.client import LLMNotConfiguredError
+
+    def refuse(*args, **kwargs):
+        raise LLMNotConfiguredError("Tests must not call a real LLM")
+
+    monkeypatch.setattr(recommendation_service, "get_llm_client", refuse)
+
+
 @pytest.fixture
 def client(db: Session) -> Iterator[TestClient]:
     app.dependency_overrides[get_db] = lambda: db

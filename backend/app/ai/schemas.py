@@ -16,7 +16,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from app.ai.client import LLMInvalidResponseError
-from app.models.ai_recommendation import RiskLevel
+from app.models.ai_recommendation import RiskLevel, Urgency
 from app.models.inventory_alert import AlertSeverity, AlertType
 from app.schemas.sales_analytics import SalesTrend
 from app.services.reorder_service import InventoryStatus
@@ -91,13 +91,6 @@ class RecommendationContext(BaseModel):
 
 
 # ---------- response expected from the LLM ----------
-
-
-class Urgency(str, enum.Enum):
-    IMMEDIATE = "IMMEDIATE"  # order today
-    SOON = "SOON"  # order within the next few days
-    ROUTINE = "ROUTINE"  # include in the next regular order
-    NONE = "NONE"  # no order needed now
 
 
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]

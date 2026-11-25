@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -19,6 +20,13 @@ class RiskLevel(str, enum.Enum):
     CRITICAL = "CRITICAL"
 
 
+class Urgency(str, enum.Enum):
+    IMMEDIATE = "IMMEDIATE"  # order today
+    SOON = "SOON"  # order within the next few days
+    ROUTINE = "ROUTINE"  # include in the next regular order
+    NONE = "NONE"  # no order needed now
+
+
 class RecommendationStatus(str, enum.Enum):
     PENDING_REVIEW = "PENDING_REVIEW"
     ACCEPTED = "ACCEPTED"
@@ -30,14 +38,24 @@ def _in(column: str, values: type[enum.Enum]) -> str:
 
 
 class AIRecommendation(Base):
-    """A validated LLM recommendation. Decision support only; never modifies inventory."""
+    """A validated LLM recommendation. Decision support only; never modifies inventory.
+
+    risk_level is decided by backend rules; urgency, recommendation, suggested_quantity and
+    reasoning come from the LLM (validated). `context` is the exact data the LLM was given.
+    """
 
     __tablename__ = "ai_recommendations"
     __table_args__ = (
         CheckConstraint(_in("risk_level", RiskLevel), name="risk_level_valid"),
         CheckConstraint(_in("status", RecommendationStatus), name="status_valid"),
-        # 0 is allowed (e.g. "do not reorder" for an overstocked product).
+        CheckConstraint(_in("urgency", Urgency), name="urgency_valid"),
+        # 0 is allowed ("no order needed now").
         CheckConstraint("suggested_quantity >= 0", name="suggested_quantity_non_negative"),
+        CheckConstraint(
+            "(prompt_tokens IS NULL OR prompt_tokens >= 0) "
+            "AND (completion_tokens IS NULL OR completion_tokens >= 0)",
+            name="token_counts_non_negative",
+        ),
         Index("ix_ai_recommendations_status_created_at", "status", "created_at"),
     )
 
@@ -51,8 +69,13 @@ class AIRecommendation(Base):
     recommendation: Mapped[str] = mapped_column(Text, nullable=False)
     suggested_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     risk_level: Mapped[str] = mapped_column(String(20), nullable=False)
-    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    urgency: Mapped[str] = mapped_column(String(20), nullable=False)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)  # one point per line
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer)
+    context: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=RecommendationStatus.PENDING_REVIEW.value
     )
