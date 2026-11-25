@@ -1,6 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 
+from typing import Literal
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root .env (shared with docker-compose); a backend/.env overrides it if present.
@@ -17,6 +20,15 @@ class Settings(BaseSettings):
     app_name: str = "SmartStock AI"
     environment: str = "development"
     database_url: str
+
+    # LLM (any OpenAI-compatible chat completions API; defaults target Groq's free tier).
+    # "openai_compatible" calls llm_base_url; "fake" is an offline stand-in (no network).
+    llm_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
+    llm_api_key: SecretStr | None = None
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "openai/gpt-oss-20b"
+    llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    llm_max_retries: int = Field(default=2, ge=0, le=5)
 
 
 @lru_cache
