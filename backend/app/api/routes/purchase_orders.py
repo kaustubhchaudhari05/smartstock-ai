@@ -48,12 +48,14 @@ def get_purchase_order(order_id: int, db: DbSession):
 
 @router.patch("/{order_id}/approve", response_model=PurchaseOrderDetail)
 def approve_purchase_order(order_id: int, data: PurchaseOrderApprove, db: DbSession):
-    """Human approval of a DRAFT / PENDING_APPROVAL order. Records the approver in the status
-    history. Nothing is sent to the supplier and stock is unchanged."""
+    """Human approval of a DRAFT / PENDING_APPROVAL order. `approver` must be listed in
+    PO_APPROVERS (403 otherwise). Records the approver in the status history. Nothing is sent to
+    the supplier and stock is unchanged."""
     return purchase_order_service.approve(db, order_id, data)
 
 
 @router.patch("/{order_id}/reject", response_model=PurchaseOrderDetail)
 def reject_purchase_order(order_id: int, data: PurchaseOrderReject, db: DbSession):
-    """Reject a DRAFT / PENDING_APPROVAL order; a reason is required and recorded."""
+    """Reject a DRAFT / PENDING_APPROVAL order; `approver` must be listed in PO_APPROVERS (403
+    otherwise) and a reason is required. Both are recorded in the status history."""
     return purchase_order_service.reject(db, order_id, data)

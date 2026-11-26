@@ -21,3 +21,9 @@ class BusinessRuleError(ServiceError):
     """Request is well-formed but violates a business rule."""
 
     status_code = 422
+
+
+class ForbiddenError(ServiceError):
+    """The caller is not allowed to perform this action (e.g. not an authorized approver)."""
+
+    status_code = 403

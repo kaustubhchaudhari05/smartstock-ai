@@ -18,7 +18,21 @@ from app.models import (
 from app.repositories import purchase_order_repository
 from app.schemas.purchase_order import PurchaseOrderApprove
 from app.services import purchase_order_service
+from app.core.config import Settings, get_settings
 from app.services.exceptions import ConflictError
+
+APPROVERS = "Priya Shah, Raj Patel"
+
+
+def set_approvers(monkeypatch, value):
+    monkeypatch.setattr(purchase_order_service, "get_settings",
+                        lambda: get_settings().model_copy(update={"po_approvers": value}))
+
+
+@pytest.fixture(autouse=True)
+def approvers(monkeypatch):
+    """A known approver list, independent of the developer's .env."""
+    set_approvers(monkeypatch, APPROVERS)
 
 
 @pytest.fixture
@@ -182,7 +196,7 @@ def test_concurrent_decisions_are_serialised(engine):
     def second_approver():
         with Session(engine) as s2:
             try:
-                purchase_order_service.approve(s2, order_id, PurchaseOrderApprove(approver="Second"))
+                purchase_order_service.approve(s2, order_id, PurchaseOrderApprove(approver="Raj Patel"))
                 outcome["result"] = "approved"
             except ConflictError as exc:
                 outcome["result"] = str(exc)
@@ -201,7 +215,7 @@ def test_concurrent_decisions_are_serialised(engine):
         with Session(engine) as check:
             changed_by = check.scalars(select(PurchaseOrderStatusHistory.changed_by).where(
                 PurchaseOrderStatusHistory.purchase_order_id == order_id)).all()
-            assert "Second" not in changed_by
+            assert "Raj Patel" not in changed_by
     finally:
         with Session(engine) as cleanup:
             cleanup.execute(delete(PurchaseOrderStatusHistory).where(
@@ -211,3 +225,45 @@ def test_concurrent_decisions_are_serialised(engine):
             cleanup.execute(delete(Product).where(Product.id == ids[1]))
             cleanup.execute(delete(Supplier).where(Supplier.id == ids[0]))
             cleanup.commit()
+
+
+# ---------- approver list (PO_APPROVERS) ----------
+
+
+@pytest.mark.parametrize("action", [approve, reject])
+def test_unknown_approver_is_forbidden(client, draft, action):
+    res = action(client, draft["id"], approver="  Mallory   Smith ")
+    assert res.status_code == 403
+    assert res.json() == {"detail": "Mallory Smith is not an authorized purchase order approver"}
+    assert "Priya" not in res.text  # the approver list is never revealed
+    po = client.get(f"/api/purchase-orders/{draft['id']}").json()
+    assert po["status"] == "DRAFT" and len(po["status_history"]) == 1
+
+
+def test_name_matching_ignores_case_and_spacing(client, draft):
+    po = approve(client, draft["id"], approver="  priya   SHAH ").json()
+    assert po["status"] == "APPROVED"
+    assert po["status_history"][-1]["changed_by"] == "Priya Shah"  # configured spelling recorded
+
+
+def test_second_approver_can_reject(client, draft):
+    assert reject(client, draft["id"], approver="Raj Patel").json()["status_history"][-1]["changed_by"] == "Raj Patel"
+
+
+@pytest.mark.parametrize("value", ["", "  ", " , ,"])
+def test_no_configured_approvers_blocks_everyone(client, monkeypatch, draft, value):
+    set_approvers(monkeypatch, value)
+    res = approve(client, draft["id"])
+    assert res.status_code == 403
+    assert res.json()["detail"] == "No purchase order approvers are configured (set PO_APPROVERS)"
+
+
+def test_approver_is_checked_before_looking_up_the_order(client):
+    assert approve(client, 999999, approver="Mallory").status_code == 403
+    assert approve(client, 999999).status_code == 404
+
+
+def test_approver_setting_parsing():
+    s = Settings(database_url="postgresql+psycopg://x@localhost/x", po_approvers=" Priya Shah, ,Raj Patel ,")
+    assert s.po_approver_names == ["Priya Shah", "Raj Patel"]
+    assert Settings(database_url="postgresql+psycopg://x@localhost/x", po_approvers="").po_approver_names == []

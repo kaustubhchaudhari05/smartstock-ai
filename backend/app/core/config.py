@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     llm_input_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
     llm_output_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
 
+    # Purchase order approvers (comma-separated names). Only these names may approve or reject
+    # purchase orders; empty = nobody can. A name check, not authentication (user decision).
+    po_approvers: str = ""
+
+    @property
+    def po_approver_names(self) -> list[str]:
+        return [name.strip() for name in self.po_approvers.split(",") if name.strip()]
+
 
 @lru_cache
 def get_settings() -> Settings:

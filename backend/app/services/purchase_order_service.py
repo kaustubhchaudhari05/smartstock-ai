@@ -9,6 +9,8 @@ Rules:
   here with Decimal arithmetic (the database also checks total_price = quantity x unit_price).
 
 Approval (human decision, never automatic):
+- Only names listed in PO_APPROVERS may approve or reject (403 otherwise; empty list = nobody).
+  Matching ignores case and repeated spaces; the configured spelling is recorded.
 - Only DRAFT or PENDING_APPROVAL orders can be approved or rejected; any other status -> 409.
 - Approving re-checks that the supplier and every product are still active and linked (422).
 - Rejecting requires a reason. Every status change is appended to the status history with the
@@ -44,7 +46,8 @@ from app.schemas.purchase_order import (
     PurchaseOrderStatusChange,
     PurchaseOrderSupplier,
 )
-from app.services.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.core.config import get_settings
+from app.services.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 
 CENT = Decimal("0.01")
 # total_price / total_amount are NUMERIC(14, 2)
@@ -193,9 +196,27 @@ def _check_still_orderable(db: Session, order: PurchaseOrder) -> None:
         _orderable_product(db, item.product_id, supplier)
 
 
+def _normalise(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
+def authorized_approver(name: str) -> str:
+    """The configured spelling of `name` if it is an approver, else ForbiddenError.
+    Error messages never list the configured approvers."""
+    approvers = get_settings().po_approver_names
+    if not approvers:
+        raise ForbiddenError("No purchase order approvers are configured (set PO_APPROVERS)")
+    wanted = _normalise(name)
+    for configured in approvers:
+        if _normalise(configured) == wanted:
+            return configured
+    raise ForbiddenError(f"{' '.join(name.split())} is not an authorized purchase order approver")
+
+
 def _decide(
     db: Session, order_id: int, to_status: PurchaseOrderStatus, approver: str, comment: str | None
 ) -> PurchaseOrderDetail:
+    approver = authorized_approver(approver)  # checked before touching the order
     try:
         order = repo.lock_order(db, order_id)
         if order is None:
