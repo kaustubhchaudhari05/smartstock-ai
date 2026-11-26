@@ -8,7 +8,16 @@ from app.ai.client import (
     LLMTimeoutError,
     LLMUnavailableError,
 )
-from app.api.routes import alerts, health, inventory, products, recommendations, sales, suppliers
+from app.api.routes import (
+    alerts,
+    health,
+    inventory,
+    products,
+    purchase_orders,
+    recommendations,
+    sales,
+    suppliers,
+)
 from app.core.config import get_settings
 from app.core.logging_config import configure_logging
 from app.services.exceptions import ServiceError
@@ -52,3 +61,4 @@ app.include_router(inventory.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(recommendations.router, prefix="/api")
+app.include_router(purchase_orders.router, prefix="/api")
