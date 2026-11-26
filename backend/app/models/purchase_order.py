@@ -10,6 +10,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.purchase_order_item import PurchaseOrderItem
+    from app.models.purchase_order_status_history import PurchaseOrderStatusHistory
     from app.models.supplier import Supplier
 
 
@@ -76,6 +77,12 @@ class PurchaseOrder(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="PurchaseOrderItem.id",
+    )
+    # Audit trail: kept with the order (history rows block deleting it).
+    status_history: Mapped[list["PurchaseOrderStatusHistory"]] = relationship(
+        back_populates="purchase_order",
+        passive_deletes="all",
+        order_by="PurchaseOrderStatusHistory.id",
     )
 
     def __repr__(self) -> str:

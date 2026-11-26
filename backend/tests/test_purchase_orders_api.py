@@ -223,7 +223,12 @@ def test_concurrent_drafts_from_one_recommendation(engine):
             assert check.scalars(select(PurchaseOrderItem).where(PurchaseOrderItem.product_id == ids[1])).all() == []
     finally:
         with Session(engine) as cleanup:
-            order_ids = select(PurchaseOrderItem.purchase_order_id).where(PurchaseOrderItem.product_id == ids[1])
+            from app.models import PurchaseOrderStatusHistory
+
+            order_ids = [o for (o,) in cleanup.execute(
+                select(PurchaseOrderItem.purchase_order_id).where(PurchaseOrderItem.product_id == ids[1]))]
+            cleanup.execute(delete(PurchaseOrderStatusHistory).where(
+                PurchaseOrderStatusHistory.purchase_order_id.in_(order_ids)))
             cleanup.execute(delete(PurchaseOrder).where(PurchaseOrder.id.in_(order_ids)))
             cleanup.execute(delete(AIRecommendation).where(AIRecommendation.id == ids[2]))
             cleanup.execute(delete(Product).where(Product.id == ids[1]))

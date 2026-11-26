@@ -15,6 +15,7 @@ def _with_details():
     return (
         joinedload(PurchaseOrder.supplier),
         selectinload(PurchaseOrder.items).joinedload(PurchaseOrderItem.product),
+        selectinload(PurchaseOrder.status_history),
     )
 
 
@@ -43,3 +44,8 @@ def get_order(db: Session, order_id: int) -> PurchaseOrder | None:
 def lock_recommendation(db: Session, recommendation_id: int) -> AIRecommendation | None:
     """Row lock: two requests must not turn the same recommendation into two orders."""
     return db.get(AIRecommendation, recommendation_id, with_for_update=True, populate_existing=True)
+
+
+def lock_order(db: Session, order_id: int) -> PurchaseOrder | None:
+    """Row lock on the order only: concurrent decisions on the same order are serialised."""
+    return db.get(PurchaseOrder, order_id, with_for_update=True, populate_existing=True)

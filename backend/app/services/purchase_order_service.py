@@ -7,6 +7,13 @@ Rules:
   supplier (products have a single supplier; reassign the product to order elsewhere).
 - Unit price defaults to the product's unit_cost. Line totals and the order total are computed
   here with Decimal arithmetic (the database also checks total_price = quantity x unit_price).
+
+Approval (human decision, never automatic):
+- Only DRAFT or PENDING_APPROVAL orders can be approved or rejected; any other status -> 409.
+- Approving re-checks that the supplier and every product are still active and linked (422).
+- Rejecting requires a reason. Every status change is appended to the status history with the
+  approver name and time. The order row is locked so concurrent decisions are serialised.
+- Approval never changes stock and never contacts the supplier (SENT/RECEIVED come later).
 """
 
 from dataclasses import dataclass
@@ -16,15 +23,25 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import AIRecommendation, Product, PurchaseOrder, PurchaseOrderItem, Supplier
+from app.models import (
+    AIRecommendation,
+    Product,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseOrderStatusHistory,
+    Supplier,
+)
 from app.models.ai_recommendation import RecommendationStatus
 from app.models.purchase_order import PurchaseOrderStatus
 from app.repositories import purchase_order_repository as repo
 from app.schemas.purchase_order import (
+    PurchaseOrderApprove,
     PurchaseOrderCreate,
     PurchaseOrderDetail,
     PurchaseOrderItemRead,
     PurchaseOrderRead,
+    PurchaseOrderReject,
+    PurchaseOrderStatusChange,
     PurchaseOrderSupplier,
 )
 from app.services.exceptions import BusinessRuleError, ConflictError, NotFoundError
@@ -32,6 +49,9 @@ from app.services.exceptions import BusinessRuleError, ConflictError, NotFoundEr
 CENT = Decimal("0.01")
 # total_price / total_amount are NUMERIC(14, 2)
 MAX_AMOUNT = Decimal("999999999999.99")
+
+S = PurchaseOrderStatus
+DECIDABLE = {S.DRAFT.value, S.PENDING_APPROVAL.value}
 
 
 @dataclass
@@ -137,6 +157,15 @@ def create_draft(db: Session, data: PurchaseOrderCreate) -> PurchaseOrderDetail:
                 )
                 for ln, amount in zip(lines, line_amounts)
             ],
+            status_history=[
+                PurchaseOrderStatusHistory(
+                    from_status=None,
+                    to_status=S.DRAFT.value,
+                    comment=f"Draft created from AI recommendation #{data.recommendation_id}"
+                    if data.recommendation_id is not None
+                    else "Draft created manually",
+                )
+            ],
         )
         db.add(order)
         for ln in lines:
@@ -152,6 +181,55 @@ def create_draft(db: Session, data: PurchaseOrderCreate) -> PurchaseOrderDetail:
         db.rollback()
         raise
     return get_order(db, order_id)
+
+
+# ---------- approval ----------
+
+
+def _check_still_orderable(db: Session, order: PurchaseOrder) -> None:
+    """Master data may have changed since the draft was made; re-validate before approving."""
+    supplier = _active_supplier(db, order.supplier_id)
+    for item in order.items:
+        _orderable_product(db, item.product_id, supplier)
+
+
+def _decide(
+    db: Session, order_id: int, to_status: PurchaseOrderStatus, approver: str, comment: str | None
+) -> PurchaseOrderDetail:
+    try:
+        order = repo.lock_order(db, order_id)
+        if order is None:
+            raise NotFoundError(f"Purchase order {order_id} not found")
+        if order.status not in DECIDABLE:
+            raise ConflictError(f"Purchase order {order.po_number} is already {order.status}")
+        if to_status == S.APPROVED:
+            _check_still_orderable(db, order)
+        from_status = order.status
+        order.status = to_status.value
+        if to_status == S.APPROVED:
+            order.approved_at = datetime.now(timezone.utc)
+        db.add(
+            PurchaseOrderStatusHistory(
+                purchase_order_id=order.id,
+                from_status=from_status,
+                to_status=to_status.value,
+                changed_by=approver,
+                comment=comment or None,
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return get_order(db, order_id)
+
+
+def approve(db: Session, order_id: int, data: PurchaseOrderApprove) -> PurchaseOrderDetail:
+    return _decide(db, order_id, S.APPROVED, data.approver, data.comment)
+
+
+def reject(db: Session, order_id: int, data: PurchaseOrderReject) -> PurchaseOrderDetail:
+    return _decide(db, order_id, S.REJECTED, data.approver, data.reason)
 
 
 # ---------- reads ----------
@@ -190,6 +268,16 @@ def to_detail(order: PurchaseOrder) -> PurchaseOrderDetail:
                 recommendation_id=i.recommendation_id,
             )
             for i in order.items
+        ],
+        status_history=[
+            PurchaseOrderStatusChange(
+                from_status=h.from_status,
+                to_status=h.to_status,
+                changed_by=h.changed_by,
+                comment=h.comment,
+                created_at=h.created_at,
+            )
+            for h in order.status_history
         ],
     )
 

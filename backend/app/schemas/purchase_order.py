@@ -2,13 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.core.limits import MAX_MOVEMENT_QUANTITY
 
 OrderQuantity = Annotated[int, Field(ge=1, le=MAX_MOVEMENT_QUANTITY)]
 UnitPrice = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
 Id = Annotated[int, Field(gt=0)]
+PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class PurchaseOrderItemCreate(BaseModel):
@@ -89,6 +90,34 @@ class PurchaseOrderRead(BaseModel):
     approved_at: datetime | None
 
 
+class PurchaseOrderStatusChange(BaseModel):
+    from_status: str | None
+    to_status: str
+    changed_by: str | None
+    comment: str | None
+    created_at: datetime
+
+
 class PurchaseOrderDetail(PurchaseOrderRead):
     supplier: PurchaseOrderSupplier
     items: list[PurchaseOrderItemRead]
+    status_history: list[PurchaseOrderStatusChange] = Field(description="Oldest first")
+
+
+class PurchaseOrderApprove(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"examples": [{"approver": "Priya Shah"}]}
+    )
+
+    approver: PersonName
+    comment: Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None = None
+
+
+class PurchaseOrderReject(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"examples": [{"approver": "Priya Shah", "reason": "Quantity too high"}]},
+    )
+
+    approver: PersonName
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=1000)]

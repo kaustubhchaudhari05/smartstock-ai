@@ -4,7 +4,13 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession
 from app.models.purchase_order import PurchaseOrderStatus
-from app.schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderDetail, PurchaseOrderRead
+from app.schemas.purchase_order import (
+    PurchaseOrderApprove,
+    PurchaseOrderCreate,
+    PurchaseOrderDetail,
+    PurchaseOrderRead,
+    PurchaseOrderReject,
+)
 from app.services import purchase_order_service
 
 router = APIRouter(prefix="/purchase-orders", tags=["purchase orders"])
@@ -38,3 +44,16 @@ def list_purchase_orders(
 @router.get("/{order_id}", response_model=PurchaseOrderDetail)
 def get_purchase_order(order_id: int, db: DbSession):
     return purchase_order_service.get_order(db, order_id)
+
+
+@router.patch("/{order_id}/approve", response_model=PurchaseOrderDetail)
+def approve_purchase_order(order_id: int, data: PurchaseOrderApprove, db: DbSession):
+    """Human approval of a DRAFT / PENDING_APPROVAL order. Records the approver in the status
+    history. Nothing is sent to the supplier and stock is unchanged."""
+    return purchase_order_service.approve(db, order_id, data)
+
+
+@router.patch("/{order_id}/reject", response_model=PurchaseOrderDetail)
+def reject_purchase_order(order_id: int, data: PurchaseOrderReject, db: DbSession):
+    """Reject a DRAFT / PENDING_APPROVAL order; a reason is required and recorded."""
+    return purchase_order_service.reject(db, order_id, data)
