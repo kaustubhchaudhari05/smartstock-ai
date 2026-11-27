@@ -106,3 +106,50 @@ body {
 .min-w-0 {
   min-width: 0;
 }
+
+/* Daily sales chart (single series). Colors validated with the dataviz palette checks:
+   #0d6efd on white and #3d8bfd on Bootstrap's dark surface #212529 both pass. */
+:root {
+  --chart-bar: #0d6efd;
+}
+
+[data-bs-theme='dark'] {
+  --chart-bar: #3d8bfd;
+}
+
+.daily-chart .chart-bar {
+  fill: var(--chart-bar);
+}
+
+.daily-chart .chart-bar.is-partial {
+  fill-opacity: 0.45; /* today: an incomplete day */
+}
+
+.daily-chart .chart-bar.is-hover {
+  fill-opacity: 0.8;
+}
+
+.daily-chart .chart-grid {
+  stroke: var(--bs-border-color);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.daily-chart .chart-axis {
+  fill: var(--bs-secondary-color);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
