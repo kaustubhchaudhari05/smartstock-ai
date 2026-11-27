@@ -1,111 +1,83 @@
+/* App shell on top of Bootstrap 5.3. Colors come from Bootstrap variables so light and dark
+   modes (data-bs-theme on <html>) both work. */
+
 :root {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --text: #1c2430;
-  --muted: #5d6b7c;
-  --border: #e2e6eb;
-  --ok: #1a7f4b;
-  --error: #c0392b;
-  --pending: #9aa5b1;
-
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12161c;
-    --surface: #1b2129;
-    --text: #e6eaef;
-    --muted: #9aa7b6;
-    --border: #2c343f;
-    --ok: #4cc38a;
-    --error: #f0776a;
-  }
-}
-
-* {
-  box-sizing: border-box;
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  background: var(--bg);
 }
 
-.container {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 48px 16px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 2rem;
-}
-
-.subtitle {
-  margin: 4px 0 32px;
-  color: var(--muted);
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
-}
-
-.card h2 {
-  margin: 0 0 12px;
-  font-size: 1rem;
-}
-
-.status-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.status-row {
+.app-shell {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--border);
+  min-height: 100vh;
 }
 
-.status-row:first-child {
-  border-top: none;
+.app-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.app-brand {
+  height: var(--topbar-height);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0; /* lets wide tables scroll inside the page instead of widening it */
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  height: var(--topbar-height);
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+.app-content {
+  flex: 1;
 }
 
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 0.6rem;
+  height: 0.6rem;
   border-radius: 50%;
-  background: var(--pending);
+  display: inline-block;
 }
 
-.status-ok .status-dot {
-  background: var(--ok);
+/* Below the lg breakpoint the sidebar slides in over the page. */
+@media (max-width: 991.98px) {
+  .app-sidebar {
+    position: fixed;
+    left: 0;
+    z-index: 1045;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .app-sidebar.is-open {
+    transform: translateX(0);
+    box-shadow: var(--bs-box-shadow-lg);
+  }
+
+  .app-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(0, 0, 0, 0.4);
+  }
 }
 
-.status-error .status-dot {
-  background: var(--error);
-}
-
-.status-label {
-  font-weight: 600;
-  min-width: 90px;
-}
-
-.status-detail {
-  color: var(--muted);
-}
-
-.status-error .status-detail {
-  color: var(--error);
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar {
+    transition: none;
+  }
 }

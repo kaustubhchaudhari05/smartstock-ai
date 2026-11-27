@@ -1,46 +1,21 @@
-import { useEffect, useState } from 'react'
-import { getAppHealth, getDatabaseHealth } from './services/healthService'
+import { Route, Routes } from 'react-router'
+import AppLayout from './layouts/AppLayout'
+import NotFoundPage from './pages/NotFoundPage'
+import PlaceholderPage from './pages/PlaceholderPage'
 
-type CheckState = { state: 'loading' } | { state: 'ok'; detail: string } | { state: 'error'; detail: string }
-
-function StatusRow({ label, check }: { label: string; check: CheckState }) {
-  const text = check.state === 'loading' ? 'Checking…' : check.detail
+export default function App() {
   return (
-    <li className={`status-row status-${check.state}`}>
-      <span className="status-dot" aria-hidden="true" />
-      <span className="status-label">{label}</span>
-      <span className="status-detail">{text}</span>
-    </li>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<PlaceholderPage title="Dashboard" subtitle="Stock overview, alerts and pending decisions" icon="speedometer2" />} />
+        <Route path="products" element={<PlaceholderPage title="Products" subtitle="Product catalogue and stock thresholds" icon="box-seam" />} />
+        <Route path="inventory" element={<PlaceholderPage title="Inventory" subtitle="Current stock and movement history" icon="boxes" />} />
+        <Route path="sales" element={<PlaceholderPage title="Sales Analytics" subtitle="Demand, trends and days of stock remaining" icon="graph-up" />} />
+        <Route path="alerts" element={<PlaceholderPage title="Alerts" subtitle="Low-stock and out-of-stock alerts" icon="exclamation-triangle" />} />
+        <Route path="ai-insights" element={<PlaceholderPage title="AI Insights" subtitle="AI replenishment recommendations" icon="stars" />} />
+        <Route path="purchase-orders" element={<PlaceholderPage title="Purchase Orders" subtitle="Drafts, approvals and order status" icon="receipt" />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
-
-function App() {
-  const [api, setApi] = useState<CheckState>({ state: 'loading' })
-  const [db, setDb] = useState<CheckState>({ state: 'loading' })
-
-  useEffect(() => {
-    getAppHealth()
-      .then((h) => setApi({ state: 'ok', detail: `${h.status} (${h.environment})` }))
-      .catch(() => setApi({ state: 'error', detail: 'Backend unreachable' }))
-
-    getDatabaseHealth()
-      .then((h) => setDb({ state: 'ok', detail: h.database }))
-      .catch(() => setDb({ state: 'error', detail: 'Database unreachable' }))
-  }, [])
-
-  return (
-    <main className="container">
-      <h1>SmartStock AI</h1>
-      <p className="subtitle">Inventory monitoring and replenishment assistant</p>
-      <section className="card">
-        <h2>System status</h2>
-        <ul className="status-list">
-          <StatusRow label="API" check={api} />
-          <StatusRow label="Database" check={db} />
-        </ul>
-      </section>
-    </main>
-  )
-}
-
-export default App
