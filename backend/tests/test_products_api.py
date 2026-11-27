@@ -193,3 +193,18 @@ def test_reactivate_via_update(client, product):
     client.delete(f"/api/products/{product.id}")
     res = client.put(f"/api/products/{product.id}", json={"is_active": True})
     assert res.json()["is_active"] is True
+
+
+def test_inventory_status_is_computed_on_read(client, product):
+    # WM-001: 12 in stock, reorder point 20 -> LOW_STOCK
+    assert client.get(f"/api/products/{product.id}").json()["inventory_status"] == "LOW_STOCK"
+    client.put(f"/api/products/{product.id}", json={"reorder_point": 12})
+    assert client.get(f"/api/products/{product.id}").json()["inventory_status"] == "LOW_STOCK"  # equal
+    client.put(f"/api/products/{product.id}", json={"reorder_point": 11, "minimum_stock": 5})
+    assert client.get(f"/api/products/{product.id}").json()["inventory_status"] == "HEALTHY"
+    client.post("/api/inventory/transactions", json={
+        "product_id": product.id, "transaction_type": "STOCK_OUT", "quantity": 12})
+    listed = client.get("/api/products", params={"search": "WM-001"}).json()
+    assert listed[0]["inventory_status"] == "OUT_OF_STOCK"
+    # read-only: cannot be sent
+    assert client.put(f"/api/products/{product.id}", json={"inventory_status": "HEALTHY"}).status_code == 422

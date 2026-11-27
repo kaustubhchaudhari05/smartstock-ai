@@ -2,9 +2,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.core.limits import MAX_STOCK
+from app.services.reorder_service import InventoryStatus, classify_stock
 
 SKU_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
 
@@ -88,3 +89,8 @@ class ProductRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @computed_field(description="HEALTHY / LOW_STOCK / OUT_OF_STOCK, computed by the backend on read")
+    @property
+    def inventory_status(self) -> InventoryStatus:
+        return classify_stock(self.current_stock, self.reorder_point)
