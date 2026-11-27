@@ -41,3 +41,56 @@ export interface InventoryOverview {
   categories: CategorySummary[]
   items: InventoryItem[]
 }
+
+export type TransactionType = 'STOCK_IN' | 'STOCK_OUT' | 'ADJUSTMENT' | 'RETURN'
+
+/** Item of GET /api/inventory/transactions (and `recent_transactions`). */
+export interface InventoryTransaction {
+  id: number
+  product_id: number
+  product_sku: string
+  product_name: string
+  transaction_type: TransactionType
+  quantity: number
+  /** Signed effect on current_stock, computed by the backend. */
+  stock_change: number
+  reference: string | null
+  notes: string | null
+  created_at: IsoDateTime
+}
+
+/** Response of GET /api/inventory/{product_id} */
+export interface ProductInventoryDetail extends InventoryItem {
+  recent_transactions: InventoryTransaction[]
+}
+
+/** Query parameters of GET /api/inventory/transactions */
+export interface TransactionListParams {
+  product_id?: number
+  transaction_type?: TransactionType
+  /** Inclusive, ISO 8601 with timezone. */
+  date_from?: IsoDateTime
+  /** Exclusive, ISO 8601 with timezone. */
+  date_to?: IsoDateTime
+  skip?: number
+  limit?: number
+}
+
+/**
+ * Body of POST /api/inventory/transactions. STOCK_IN / STOCK_OUT / RETURN take a positive
+ * quantity; ADJUSTMENT is signed (+ adds, - removes) and may not be 0.
+ */
+export interface StockMovementCreate {
+  product_id: number
+  transaction_type: TransactionType
+  quantity: number
+  reference?: string | null
+  notes?: string | null
+}
+
+/** Response of POST /api/inventory/transactions */
+export interface StockMovementResult {
+  transaction: InventoryTransaction
+  previous_stock: number
+  current_stock: number
+}

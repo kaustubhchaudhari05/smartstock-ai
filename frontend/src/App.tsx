@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router'
 import AppLayout from './layouts/AppLayout'
 import DashboardPage from './pages/DashboardPage'
+import InventoryPage from './pages/inventory/InventoryPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProductsPage from './pages/products/ProductsPage'
 import PlaceholderPage from './pages/PlaceholderPage'
@@ -11,7 +12,7 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
-        <Route path="inventory" element={<PlaceholderPage title="Inventory" subtitle="Current stock and movement history" icon="boxes" />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="sales" element={<PlaceholderPage title="Sales Analytics" subtitle="Demand, trends and days of stock remaining" icon="graph-up" />} />
         <Route path="alerts" element={<PlaceholderPage title="Alerts" subtitle="Low-stock and out-of-stock alerts" icon="exclamation-triangle" />} />
         <Route path="ai-insights" element={<PlaceholderPage title="AI Insights" subtitle="AI replenishment recommendations" icon="stars" />} />

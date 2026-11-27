@@ -14,21 +14,24 @@ export interface ApiState<T> {
 interface Result<T> {
   data: T | undefined
   error: Error | undefined
-  /** Which loader and attempt produced this result. */
+  /** Which loader, refresh key and attempt produced this result. */
   source: (() => Promise<T>) | undefined
+  key: unknown
   attempt: number
 }
 
 /**
- * Load data from the API whenever `load` changes and on reload().
+ * Load data from the API whenever `load` or `refreshKey` changes, and on reload().
  * `load` must be stable (module-level, or useCallback with its real dependencies),
- * otherwise it is called on every render.
+ * otherwise it is called on every render. Change `refreshKey` to refetch after a related
+ * change elsewhere on the page (e.g. a recorded stock movement).
  */
-export function useApi<T>(load: () => Promise<T>): ApiState<T> {
+export function useApi<T>(load: () => Promise<T>, refreshKey?: unknown): ApiState<T> {
   const [result, setResult] = useState<Result<T>>({
     data: undefined,
     error: undefined,
     source: undefined,
+    key: undefined,
     attempt: 0,
   })
   const [attempt, setAttempt] = useState(0)
@@ -36,17 +39,20 @@ export function useApi<T>(load: () => Promise<T>): ApiState<T> {
   useEffect(() => {
     let cancelled = false
     load()
-      .then((data) => !cancelled && setResult({ data, error: undefined, source: load, attempt }))
+      .then(
+        (data) => !cancelled && setResult({ data, error: undefined, source: load, key: refreshKey, attempt }),
+      )
       .catch(
-        (error: Error) => !cancelled && setResult((r) => ({ ...r, error, source: load, attempt })),
+        (error: Error) =>
+          !cancelled && setResult((r) => ({ ...r, error, source: load, key: refreshKey, attempt })),
       )
     return () => {
       cancelled = true
     }
-  }, [load, attempt])
+  }, [load, refreshKey, attempt])
 
   const reload = useCallback(() => setAttempt((n) => n + 1), [])
-  const loading = result.source !== load || result.attempt !== attempt
+  const loading = result.source !== load || result.key !== refreshKey || result.attempt !== attempt
 
   return { data: result.data, error: loading ? undefined : result.error, loading, reload }
 }

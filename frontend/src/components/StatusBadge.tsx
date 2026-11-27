@@ -9,6 +9,7 @@ export type BadgeKind =
   | 'urgency'
   | 'recommendationStatus'
   | 'purchaseOrder'
+  | 'transactionType'
 
 const LEVEL = { LOW: 'secondary', MEDIUM: 'info', HIGH: 'warning', CRITICAL: 'danger' }
 
@@ -28,6 +29,7 @@ const COLORS: Record<BadgeKind, Record<string, string>> = {
     RECEIVED: 'primary',
     CANCELLED: 'dark',
   },
+  transactionType: { STOCK_IN: 'success', STOCK_OUT: 'danger', ADJUSTMENT: 'warning', RETURN: 'info' },
 }
 
 interface StatusBadgeProps {
