@@ -10,6 +10,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderDetail,
     PurchaseOrderRead,
     PurchaseOrderReject,
+    PurchaseOrderSummary,
 )
 from app.services import purchase_order_service
 
@@ -26,6 +27,13 @@ def create_purchase_order(data: PurchaseOrderCreate, db: DbSession):
     Totals are calculated by the backend.
     """
     return purchase_order_service.create_draft(db, data)
+
+
+@router.get("/summary", response_model=PurchaseOrderSummary)
+def purchase_order_summary(db: DbSession, supplier_id: int | None = None):
+    """Order counts and values per status (all statuses, zero-filled), plus the number and value
+    of orders awaiting a decision (DRAFT + PENDING_APPROVAL). Computed by the backend."""
+    return purchase_order_service.summarize(db, supplier_id=supplier_id)
 
 
 @router.get("", response_model=list[PurchaseOrderRead])

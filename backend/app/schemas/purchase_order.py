@@ -121,3 +121,22 @@ class PurchaseOrderReject(BaseModel):
 
     approver: PersonName
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=1000)]
+
+
+class PurchaseOrderStatusTotal(BaseModel):
+    status: str
+    order_count: int
+    total_amount: Decimal
+
+
+class PurchaseOrderSummary(BaseModel):
+    """Backend-computed counts and values for the dashboard (no arithmetic in the frontend)."""
+
+    awaiting_decision_count: int = Field(description="DRAFT + PENDING_APPROVAL orders")
+    awaiting_decision_amount: Decimal
+    approved_count: int = Field(description="APPROVED orders (not yet sent)")
+    approved_amount: Decimal
+    total_orders: int
+    by_status: list[PurchaseOrderStatusTotal] = Field(
+        description="Every status in workflow order, zero-filled"
+    )

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -49,3 +50,15 @@ def lock_recommendation(db: Session, recommendation_id: int) -> AIRecommendation
 def lock_order(db: Session, order_id: int) -> PurchaseOrder | None:
     """Row lock on the order only: concurrent decisions on the same order are serialised."""
     return db.get(PurchaseOrder, order_id, with_for_update=True, populate_existing=True)
+
+
+def totals_by_status(db: Session, supplier_id: int | None = None) -> dict[str, tuple[int, Decimal]]:
+    """{status: (order count, sum of total_amount)} in one query; statuses without orders absent."""
+    stmt = select(
+        PurchaseOrder.status,
+        func.count(PurchaseOrder.id),
+        func.coalesce(func.sum(PurchaseOrder.total_amount), 0),
+    ).group_by(PurchaseOrder.status)
+    if supplier_id is not None:
+        stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
+    return {status: (int(count), Decimal(total)) for status, count, total in db.execute(stmt)}

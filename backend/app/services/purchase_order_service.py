@@ -44,6 +44,8 @@ from app.schemas.purchase_order import (
     PurchaseOrderRead,
     PurchaseOrderReject,
     PurchaseOrderStatusChange,
+    PurchaseOrderStatusTotal,
+    PurchaseOrderSummary,
     PurchaseOrderSupplier,
 )
 from app.core.config import get_settings
@@ -312,3 +314,25 @@ def get_order(db: Session, order_id: int) -> PurchaseOrderDetail:
     if order is None:
         raise NotFoundError(f"Purchase order {order_id} not found")
     return to_detail(order)
+
+
+def summarize(db: Session, supplier_id: int | None = None) -> PurchaseOrderSummary:
+    totals = repo.totals_by_status(db, supplier_id)
+    by_status = [
+        PurchaseOrderStatusTotal(
+            status=status.value,
+            order_count=totals.get(status.value, (0, Decimal("0")))[0],
+            total_amount=totals.get(status.value, (0, Decimal("0")))[1].quantize(CENT),
+        )
+        for status in S  # enum order = workflow order
+    ]
+    row = {t.status: t for t in by_status}
+    waiting = [row[S.DRAFT.value], row[S.PENDING_APPROVAL.value]]
+    return PurchaseOrderSummary(
+        awaiting_decision_count=sum(t.order_count for t in waiting),
+        awaiting_decision_amount=sum((t.total_amount for t in waiting), Decimal("0.00")),
+        approved_count=row[S.APPROVED.value].order_count,
+        approved_amount=row[S.APPROVED.value].total_amount,
+        total_orders=sum(t.order_count for t in by_status),
+        by_status=by_status,
+    )
